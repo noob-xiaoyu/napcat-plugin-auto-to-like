@@ -16,7 +16,7 @@ interface NoticeEvent extends BaseEvent {
 // Define a union type for potential like events
 type LikeEvent = 
     | (NoticeEvent & { notice_type: 'notify'; sub_type: 'poke'; target_id: number; user_id: number; group_id?: number; })
-    | (NoticeEvent & { notice_type: 'notify'; sub_type: 'profile_like'; target_id: number; user_id: number; })
+    | (NoticeEvent & { notice_type: 'notify'; sub_type: 'profile_like'; operator_id: number; times?: number; })
     | (NoticeEvent & { notice_type: 'thumb_up'; user_id: number; target_id: number; count?: number; });
 
 export async function handleLike(ctx: NapCatPluginContext, event: any) {
@@ -31,18 +31,31 @@ export async function handleLike(ctx: NapCatPluginContext, event: any) {
 
     if (!isThumbUp && !isPoke && !isProfileLike) return;
 
-    const user_id = event.user_id;
-    // profile_like usually doesn't have count, assume 1 if missing
-    const times = event.count || 1;
+    // 提取 user_id (操作者) 和 次数
+    let user_id: number;
+    let times = 1;
 
-    // 检查目标是否为机器人自己
-    // 注意：使用 != 而不是 !== 以允许 string 和 number 的比较
-    if (event.target_id != pluginState.selfId) {
-        // 如果 selfId 为空（尚未初始化），也会导致这里返回
-        if (!pluginState.selfId) {
-            logger.warn('[LikeHandler] 机器人 SelfId 尚未初始化，跳过处理。');
+    if (isProfileLike) {
+        // 根据提供的 payload: { operator_id: ..., times: ... }
+        user_id = event.operator_id;
+        times = event.times || 1;
+        
+        // profile_like 事件通常发给被点赞的人（也就是机器人自己）
+        // 所以不需要像 poke 那样检查 target_id，只要收到这个事件就说明是给我们的
+    } else {
+        // thumb_up 和 poke 通常有 user_id 和 target_id
+        user_id = event.user_id;
+        times = event.count || 1;
+
+        // 检查目标是否为机器人自己
+        // 注意：使用 != 而不是 !== 以允许 string 和 number 的比较
+        if (event.target_id != pluginState.selfId) {
+            // 如果 selfId 为空（尚未初始化），也会导致这里返回
+            if (!pluginState.selfId) {
+                logger.warn('[LikeHandler] 机器人 SelfId 尚未初始化，跳过处理。');
+            }
+            return;
         }
-        return;
     }
 
     if (!pluginState.config.autoLikeEnabled) {
