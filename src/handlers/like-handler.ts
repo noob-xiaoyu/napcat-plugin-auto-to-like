@@ -114,17 +114,18 @@ export async function handleLike(ctx: NapCatPluginContext, event: any) {
     // 5. 执行回赞/回戳
     try {
         if (isThumbUp || isProfileLike) {
-            // 点赞事件 -> 回戳 (因为没有 send_like API)
-            await pluginState.callApi('friend_poke', { user_id });
-            logger.info(`收到用户 ${user_id} 的点赞，已回戳。`);
+            // 用户确认 send_like 是正确的 API
+            // send_like payload: { user_id, times }
+            await pluginState.callApi('send_like', { user_id: String(user_id), times });
+            logger.info(`收到用户 ${user_id} 的点赞，已回赞 ${times} 次。`);
         } else if (isPoke) {
             // 戳一戳事件 -> 回戳
             if (event.group_id) {
-                await pluginState.callApi('group_poke', { group_id: event.group_id, user_id });
+                await pluginState.callApi('group_poke', { group_id: String(event.group_id), user_id: String(user_id) });
                 logger.info(`收到群 ${event.group_id} 内用户 ${user_id} 的戳一戳，已回戳。`);
             } else {
-                await pluginState.callApi('friend_poke', { user_id });
-                logger.info(`收到用户 ${user_id} 的戳一戳，已回戳。`);
+                // 用户反馈 "poke只有群poke"，意味着私聊戳一戳可能不支持或不应处理
+                logger.info(`收到用户 ${user_id} 的私聊戳一戳，但仅支持群聊回戳，忽略。`);
             }
         }
 
